@@ -18,6 +18,7 @@ import (
 
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/labstack/echo/v4"
+	"github.com/oapi-codegen/runtime"
 )
 
 // DefaultErrorResponse defines model for DefaultErrorResponse.
@@ -107,6 +108,9 @@ func WithRequestEditorFn(fn RequestEditorFn) ClientOption {
 
 // The interface specification for the client above.
 type ClientInterface interface {
+	// GetUserById request
+	GetUserById(ctx context.Context, uid int, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// GetUser request
 	GetUser(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -114,6 +118,18 @@ type ClientInterface interface {
 	PostUserWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	PostUser(ctx context.Context, body PostUserJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+}
+
+func (c *Client) GetUserById(ctx context.Context, uid int, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetUserByIdRequest(c.Server, uid)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
 }
 
 func (c *Client) GetUser(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -150,6 +166,40 @@ func (c *Client) PostUser(ctx context.Context, body PostUserJSONRequestBody, req
 		return nil, err
 	}
 	return c.Client.Do(req)
+}
+
+// NewGetUserByIdRequest generates requests for GetUserById
+func NewGetUserByIdRequest(server string, uid int) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "uid", runtime.ParamLocationPath, uid)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/user/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
 }
 
 // NewGetUserRequest generates requests for GetUser
@@ -262,6 +312,9 @@ func WithBaseURL(baseURL string) ClientOption {
 
 // ClientWithResponsesInterface is the interface specification for the client with responses above.
 type ClientWithResponsesInterface interface {
+	// GetUserByIdWithResponse request
+	GetUserByIdWithResponse(ctx context.Context, uid int, reqEditors ...RequestEditorFn) (*GetUserByIdResponse, error)
+
 	// GetUserWithResponse request
 	GetUserWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetUserResponse, error)
 
@@ -269,6 +322,29 @@ type ClientWithResponsesInterface interface {
 	PostUserWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostUserResponse, error)
 
 	PostUserWithResponse(ctx context.Context, body PostUserJSONRequestBody, reqEditors ...RequestEditorFn) (*PostUserResponse, error)
+}
+
+type GetUserByIdResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *User
+	JSONDefault  *DefaultErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r GetUserByIdResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetUserByIdResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
 }
 
 type GetUserResponse struct {
@@ -316,6 +392,15 @@ func (r PostUserResponse) StatusCode() int {
 	return 0
 }
 
+// GetUserByIdWithResponse request returning *GetUserByIdResponse
+func (c *ClientWithResponses) GetUserByIdWithResponse(ctx context.Context, uid int, reqEditors ...RequestEditorFn) (*GetUserByIdResponse, error) {
+	rsp, err := c.GetUserById(ctx, uid, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetUserByIdResponse(rsp)
+}
+
 // GetUserWithResponse request returning *GetUserResponse
 func (c *ClientWithResponses) GetUserWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetUserResponse, error) {
 	rsp, err := c.GetUser(ctx, reqEditors...)
@@ -340,6 +425,39 @@ func (c *ClientWithResponses) PostUserWithResponse(ctx context.Context, body Pos
 		return nil, err
 	}
 	return ParsePostUserResponse(rsp)
+}
+
+// ParseGetUserByIdResponse parses an HTTP response from a GetUserByIdWithResponse call
+func ParseGetUserByIdResponse(rsp *http.Response) (*GetUserByIdResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetUserByIdResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest User
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest DefaultErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
 }
 
 // ParseGetUserResponse parses an HTTP response from a GetUserWithResponse call
@@ -404,6 +522,9 @@ func ParsePostUserResponse(rsp *http.Response) (*PostUserResponse, error) {
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
 
+	// (GET /user/{uid})
+	GetUserById(ctx echo.Context, uid int) error
+
 	// (GET /users)
 	GetUser(ctx echo.Context) error
 
@@ -414,6 +535,22 @@ type ServerInterface interface {
 // ServerInterfaceWrapper converts echo contexts to parameters.
 type ServerInterfaceWrapper struct {
 	Handler ServerInterface
+}
+
+// GetUserById converts echo context to params.
+func (w *ServerInterfaceWrapper) GetUserById(ctx echo.Context) error {
+	var err error
+	// ------------- Path parameter "uid" -------------
+	var uid int
+
+	err = runtime.BindStyledParameterWithLocation("simple", false, "uid", runtime.ParamLocationPath, ctx.Param("uid"), &uid)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter uid: %s", err))
+	}
+
+	// Invoke the callback with all the unmarshaled arguments
+	err = w.Handler.GetUserById(ctx, uid)
+	return err
 }
 
 // GetUser converts echo context to params.
@@ -462,6 +599,7 @@ func RegisterHandlersWithBaseURL(router EchoRouter, si ServerInterface, baseURL 
 		Handler: si,
 	}
 
+	router.GET(baseURL+"/user/:uid", wrapper.GetUserById)
 	router.GET(baseURL+"/users", wrapper.GetUser)
 	router.POST(baseURL+"/users", wrapper.PostUser)
 
@@ -470,13 +608,14 @@ func RegisterHandlersWithBaseURL(router EchoRouter, si ServerInterface, baseURL 
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"H4sIAAAAAAAC/8xSsU7jQBD9ldPclVbsu3TuDoFQREEEokIUiz1xNrJ3N7trpChygS0qCiQKEB0VgpKG",
-	"KuJnVuE70E4ShSihS0G1o5k3743f8xgSWSgpUFgD8RhM0seCUbmLPVbmdk9rqY/QKCkM+r7SUqG2HAlV",
-	"oDEso4EdKYQYjNVcZFBVwaIjzweYWKgCODGo1zl4+mWdC4sZao8WrPiGWOOw5BpTiE/99hx6tqbosVz0",
-	"JLFwm/vZMStUjr/+dzsQwAVqw6WAGP62Iq8pFQqmOMTQbkWtNgSgmO3TmWFpUFOVofVPiibRXNkZgWue",
-	"XDNx9ZtrJh/N1fTx1dW305u76fu9u3xw9TUQu2Ye30khhn20ZIj/npm/xP4vivyTSGFRkBBTKucJLYYD",
-	"49UWSfnqj8YexPA7XEYZznMMiZ9sWD328ACoRxFvTW3jL7NB3dXPrnlxzWQ2VNKQ8Ko7XWmW9gxLNHZH",
-	"pqOtO1Ntdv/H2lVV1WcAAAD//wPPicy1AwAA",
+	"H4sIAAAAAAAC/+SSsYoUQRCGX0VKw2Fn9bLOPBRZDDwUo+OCdqZ2r4+d7r6qHmEZOnAGIwPBQDEzEg1N",
+	"jBZfplmfQ7p2j73jxmwDwahnuv6uv+qr6qByjXcWbWBQHXB1jo2Wz0c41+0yPCZy9BzZO8uY7z05jxQM",
+	"iqpBZr2QQFh5BAUcyNgFxFhc3bhXF1gFiAW8ZKTbOUx97bmxARdIWW1185fEhJetIaxBnebXO+nZLces",
+	"NXbuJIsJyxx7oRu/xDsPT2ZQwGskNs6CgvuTafZ0Hq32BhQcTaaTIyjA63AuZZYtI5Vda+qYfxcY8lEj",
+	"V2R82GZJw9c0rFP/Mw3r38PbzZcfqf+wef9x8+tTevM59e9ALEhn/awGBU8wZCrHq1ktZqQbDEgM6rQD",
+	"k3PmAq5aVNBKv3sAgVosdnMbwxjPsno7PmnjwXSaj8rZgFZa0N4vTSUllRec++iuJbxHOAcFd8v9ppS7",
+	"NSllnkL5JoZnT0HuZIMO5ja6kSPuIsiBWGyHxoefF/y/VAvwjsX0JpkTx3s0ly1yOHb16uBU4jj5fwlV",
+	"6r+l4Xsa1lJvjH8CAAD///+oAb5mBQAA",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

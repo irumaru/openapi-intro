@@ -12,6 +12,14 @@ import (
 
 type apiController struct{}
 
+// GET /user/{id}
+func (a apiController) GetUserById(ctx echo.Context, uid int) error {
+	return ctx.JSON(http.StatusOK, &oapi.User{
+		Id:   uid,
+		Name: "irumaru",
+	})
+}
+
 // GET /user
 func (a apiController) GetUser(ctx echo.Context) error {
 	return ctx.JSON(http.StatusOK, &oapi.User{

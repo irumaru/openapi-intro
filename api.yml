@@ -4,6 +4,29 @@ info:
   version: '1.0'
 
 paths:
+  /user/{uid}:
+    get:
+      operationId: GetUserById
+      description: ユーザー情報を取得する
+      parameters:
+        - name: uid
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        default:
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DefaultErrorResponse'
   /users:
     get:
       operationId: GetUser
@@ -16,7 +39,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/User'
         default:
-          description: エラー
+          description: Error
           content:
             application/json:
               schema:
